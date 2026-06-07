@@ -1,0 +1,355 @@
+/* ============================================================ glass-kit
+   Self-contained styles for the kit. All classes are prefixed `gk-`.
+   Theme via these CSS variables on any ancestor (or :root):           */
+
+:root {
+  --gk-text: #f4f7ff;            /* control text colour                */
+  --gk-fill: 255 255 255;        /* slider/value bar (r g b)           */
+  --gk-accent: 108 224 158;      /* switch "on" colour (r g b)         */
+  --gk-rail: 10 14 22;           /* slider track colour (r g b)        */
+}
+
+/* ---------------------------------------------------------------- base lens */
+
+.gk-glass {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  color: var(--gk-text);
+}
+
+.gk-glass__defs {
+  position: absolute;
+}
+
+.gk-glass__sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    150deg,
+    rgba(255, 255, 255, 0.3) 0%,
+    rgba(255, 255, 255, 0.06) 30%,
+    rgba(255, 255, 255, 0) 60%
+  );
+  mix-blend-mode: screen;
+}
+
+.gk-glass__content {
+  position: relative;
+  height: 100%;
+  z-index: 2;
+}
+
+.gk-glass__sample {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  z-index: 1;
+}
+
+/* ---------------------------------------------------------------- draggable */
+
+.gk-draggable {
+  position: absolute;
+  cursor: grab;
+  touch-action: none;
+  transition: transform 0.18s ease;
+  will-change: left, top;
+}
+
+/* Never use CSS `filter` on a draggable ancestor — it flattens the subtree and
+   stops descendant backdrop-filter from sampling, freezing the refraction
+   mid-drag. transform is safe. */
+.gk-draggable.is-dragging {
+  cursor: grabbing;
+  transform: scale(1.015);
+}
+
+/* ---------------------------------------------------------------- panel */
+
+.gk-panel__body {
+  height: 100%;
+}
+
+/* ---------------------------------------------------------------- button */
+
+.gk-button {
+  position: relative;
+  display: inline-block;
+}
+
+.gk-button > .gk-glass {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* solid wash that fades to reveal the glass on press. No border here — the
+   Glass owns the edge, so a border would double up and look broken. */
+.gk-button__skin {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.gk-button__hit {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  border: none;
+  background: transparent;
+  color: var(--gk-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+}
+
+.gk-button__hit:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* ---------------------------------------------------------------- slider */
+
+.gk-slider {
+  margin: 10px 0;
+}
+
+.gk-slider__head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 7px;
+  color: var(--gk-text);
+  opacity: 0.92;
+}
+
+.gk-slider__val {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.78;
+}
+
+.gk-slider__hit {
+  position: relative;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.gk-slider__rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(var(--gk-rail) / 0.3);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.gk-slider__fill {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(var(--gk-fill) / 0.65),
+    rgba(var(--gk-fill) / 0.95)
+  );
+}
+
+.gk-slider__thumb {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  margin-top: -12px; /* -THUMB/2 */
+  transform-origin: center center;
+}
+
+.gk-slider__thumb > .gk-glass {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.gk-slider__thumbskin {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.35);
+}
+
+/* ---------------------------------------------------------------- segmented */
+
+/* transparent container — any background here sits behind the glass selector
+   and would be refracted as flat colour instead of the real backdrop. */
+.gk-seg {
+  position: relative;
+  display: flex;
+}
+
+.gk-seg__sel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  transform-origin: center center;
+  cursor: grab;
+}
+
+.gk-seg__sel:active {
+  cursor: grabbing;
+}
+
+.gk-seg__tab {
+  position: relative;
+  z-index: 2;
+  border: none;
+  background: transparent;
+  color: var(--gk-text);
+  opacity: 0.68;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.gk-seg__tab.is-active {
+  opacity: 1;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* ---------------------------------------------------------------- switch */
+
+.gk-switch {
+  position: relative;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.gk-switch__track {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(120, 130, 150, 0.4);
+  transition: background 0.25s ease;
+}
+
+.gk-switch.is-on .gk-switch__track {
+  background: rgba(var(--gk-accent) / 0.85);
+}
+
+.gk-switch__knob {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  transform-origin: center center;
+}
+
+.gk-switch__knob > .gk-glass {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.gk-switch__skin {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+/* ---------------------------------------------------------------- menu */
+
+.gk-menu-root {
+  position: relative;
+}
+
+.gk-menu-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+}
+
+.gk-menu {
+  position: relative;
+  z-index: 2;
+  overflow: hidden;
+  box-shadow: 0 24px 70px rgba(8, 15, 35, 0.4);
+}
+
+.gk-menu > .gk-glass {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.gk-menu__trigger {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  border: none;
+  background: transparent;
+  color: var(--gk-text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+}
+
+.gk-menu__chev {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.gk-menu__list {
+  position: relative;
+  z-index: 2;
+  padding: 0 8px 8px;
+}
+
+.gk-menu__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--gk-text);
+  opacity: 0.92;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.gk-menu__item:hover {
+  background: rgba(255, 255, 255, 0.16);
+}

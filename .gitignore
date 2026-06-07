@@ -1,0 +1,10 @@
+node_modules
+dist
+*.local
+.DS_Store
+*.tsbuildinfo
+
+# dev/test scratch (screenshots, patchright scripts)
+*.png
+!docs/*.png
+*.py
