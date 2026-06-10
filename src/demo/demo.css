@@ -44,8 +44,17 @@ body {
 }
 
 .backdrop img {
+  /* WebKit resolves `height: 100%` on a grid item against the whole grid
+     container, not the row track, so each photo stretched to the full 1980px
+     column height and `object-fit: cover` zoomed a landscape photo into a tall
+     sliver — heavily cropped and upscaled-soft. Sizing via `align-self: stretch`
+     (the grid default) with `height: auto` lets WebKit size the image to its row
+     track, matching Chromium. `min-height: 0` keeps a replaced element from
+     refusing to shrink below its intrinsic height. */
   width: 100%;
-  height: 100%;
+  height: auto;
+  min-height: 0;
+  align-self: stretch;
   object-fit: cover;
   display: block;
 }

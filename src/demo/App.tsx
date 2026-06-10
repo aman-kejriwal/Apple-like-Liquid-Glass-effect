@@ -36,6 +36,10 @@ export function App() {
     depth,
     chromaAmount: chroma,
     specularStrength: specular,
+    // On WebKit/Firefox the kit clones this backdrop into each lens and runs the
+    // displacement filter on the clone (real refraction); Chromium ignores it
+    // and refracts the live backdrop directly.
+    backdropSelector: ".backdrop",
   };
 
   return (

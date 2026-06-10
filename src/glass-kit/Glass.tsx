@@ -15,6 +15,7 @@ import {
   type DisplacementMapOptions,
 } from "./displacement";
 import { supportsBackdropDisplacement } from "./support";
+import { useBackdropRefraction } from "./useBackdropRefraction";
 
 export type GlassProps = PropsWithChildren<{
   /** rendered box size in px */
@@ -62,6 +63,16 @@ export type GlassProps = PropsWithChildren<{
   sampleHeight?: number;
   sampleOffsetX?: number;
   sampleOffsetY?: number;
+  /**
+   * CSS selector for the page's backdrop element (e.g. a photo grid or hero
+   * image). On engines that can't refract through `backdrop-filter` (WebKit,
+   * Firefox) the kit clones that element into the lens and runs the displacement
+   * filter on the clone via a plain `filter:` — which those engines DO execute —
+   * giving real refraction of the real content instead of a frosted blur. The
+   * clone tracks scroll/drag on a transform-only rAF loop and pauses off-screen.
+   * Chromium ignores this and uses its native backdrop-filter path.
+   */
+  backdropSelector?: string;
 }>;
 
 const DEFAULTS = {
@@ -116,6 +127,7 @@ export function Glass(props: GlassProps) {
     sampleHeight,
     sampleOffsetX = 0,
     sampleOffsetY = 0,
+    backdropSelector,
   } = props;
 
   const lensHalfWidth = props.lensW ?? width / 2;
@@ -145,9 +157,26 @@ export function Glass(props: GlassProps) {
   // fallback (false), then we confirm on mount so Chromium upgrades to true
   // refraction without a hydration mismatch on the filter url.
   const [canRefract, setCanRefract] = useState(false);
+  // `mounted` flips true after the first client effect; before that we never
+  // pick the WebKit clone path (it needs the real DOM + selector), so SSR/first
+  // paint stays the safe fallback.
+  const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setCanRefract(supportsBackdropDisplacement());
+    setMounted(true);
   }, []);
+
+  // WebKit/Firefox can't refract through backdrop-filter, but they DO run an SVG
+  // filter applied via plain `filter:`. When the consumer points us at the page
+  // backdrop, we clone that slice into the lens and filter the clone — real
+  // refraction of real content. Only on the non-Chromium path, only when we have
+  // a backdrop to sample, and only after mount (needs the live DOM).
+  const useCloneRefraction = mounted && !canRefract && !!backdropSelector;
+
+  const reduceMotion =
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   // Fresh filter id every time the map changes. Stable ids freeze the lens in
   // Safari (it caches filter output by id); a new id forces a re-render.
@@ -182,19 +211,24 @@ export function Glass(props: GlassProps) {
     ],
   );
 
-  // Bake the map (refracting browsers) or the highlight overlay (fallback). The
-  // bake is the only expensive bit and runs solely when params change — never
-  // per frame, never on scroll.
+  // Either refraction path (Chromium backdrop-filter, or the WebKit/Firefox
+  // clone-and-`filter:` path) needs the baked displacement map and a fresh
+  // filter id. Only the plain frosted fallback (no backdrop selector) needs the
+  // highlight overlay instead. The bake is the only expensive bit and runs
+  // solely when params change — never per frame, never on scroll.
+  const willRefract = canRefract || useCloneRefraction;
   useEffect(() => {
-    if (canRefract) {
+    if (willRefract) {
       const url = getDisplacementMap(mapOptions);
       setMapUrl(url);
       filterSeq += 1;
+      // Fresh id per bake: Safari caches SVG filter output by id and would
+      // otherwise freeze on a stale map.
       setFilterId(`gk-glass-${filterSeq}`);
     } else {
       setOverlayUrl(getHighlightOverlay(mapOptions));
     }
-  }, [mapOptions, canRefract]);
+  }, [mapOptions, willRefract]);
 
   // Pause the (GPU-expensive) backdrop pass while the lens is scrolled out of
   // view. backdrop-filter re-runs every frame the backdrop changes even when
@@ -218,40 +252,66 @@ export function Glass(props: GlassProps) {
   const matrixScaleY = displacementScale > 0 ? scaleY / displacementScale : 0;
   const colorMatrix = mapScaleMatrix(matrixScaleX, matrixScaleY);
 
-  const filterReady = canRefract && mapUrl && filterId;
+  // The SVG <filter> is live (and usable as url(#id)) whenever either refraction
+  // path is active and the map has baked.
+  const filterDefined = willRefract && !!mapUrl && !!filterId;
+  // Chromium refracts the live backdrop directly through backdrop-filter.
+  const backdropDisplace = canRefract && filterDefined;
 
   // backdrop-filter value. Off-screen → none (skip the pass entirely).
   let backdropFilter: string;
   if (!onScreen) {
     backdropFilter = "none";
-  } else if (filterReady) {
+  } else if (backdropDisplace) {
     backdropFilter = `url(#${filterId})${blurAmount > 0 ? ` blur(${blurAmount}px)` : ""}`;
+  } else if (useCloneRefraction) {
+    // The clone layer carries the displacement filter; the host stays clear so
+    // the refracted clone reads as the glass. A touch of saturate lifts it.
+    backdropFilter =
+      blurAmount > 0 ? `blur(${blurAmount}px) saturate(1.15)` : "saturate(1.15)";
   } else if (!canRefract) {
-    // Fallback: a real frosted blur (the rim highlight comes from the overlay).
+    // Last-ditch fallback (no backdrop selector given): a real frosted blur with
+    // the baked rim highlight overlay so it still reads as lit glass.
     backdropFilter = `blur(${Math.max(blurAmount, 8)}px) saturate(1.4)`;
   } else if (blurAmount > 0) {
     backdropFilter = `blur(${blurAmount}px)`;
   } else {
     backdropFilter = "none";
   }
-  const sampleFilter = filterReady ? `url(#${filterId})` : "none";
+  const sampleFilter = filterDefined ? `url(#${filterId})` : "none";
+
+  // Whether we show the plain frosted fallback (rim overlay + heavy blur).
+  const frostedFallback = !canRefract && !useCloneRefraction;
+
+  // Wire the WebKit/Firefox clone-refraction path. Inert on Chromium and when no
+  // backdrop selector is supplied. The hook pauses its own rAF loop off-screen
+  // via an internal IntersectionObserver, so `active` deliberately does NOT
+  // include `onScreen` — that would tear down and rebuild the clone on every
+  // scroll in/out. It only needs the map to have baked (filterDefined).
+  useBackdropRefraction({
+    hostRef: rootRef,
+    selector: backdropSelector,
+    filterId,
+    active: useCloneRefraction && filterDefined,
+    reduceMotion,
+  });
 
   return (
     <div
       ref={rootRef}
-      className={`gk-glass ${canRefract ? "" : "gk-glass--fallback"} ${className ?? ""}`}
+      className={`gk-glass ${frostedFallback ? "gk-glass--fallback" : ""} ${useCloneRefraction ? "gk-glass--clone" : ""} ${className ?? ""}`}
       style={{
         width,
         height,
         borderRadius,
-        background: `rgba(${tintColor} / ${canRefract ? tintOpacity : tintOpacity + 0.06})`,
+        background: `rgba(${tintColor} / ${frostedFallback ? tintOpacity + 0.06 : tintOpacity})`,
         boxShadow: `0 24px 80px rgba(8, 15, 35, ${shadowOpacity}), inset 0 0 0 1px rgba(255,255,255,.55), inset 0 -16px 34px rgba(255,255,255,.18)`,
         backdropFilter,
         WebkitBackdropFilter: backdropFilter,
         ...style,
       }}
     >
-      {filterReady && (
+      {filterDefined && (
         <svg aria-hidden="true" className="gk-glass__defs" focusable="false" width="0" height="0">
           <defs>
             <filter
@@ -291,9 +351,10 @@ export function Glass(props: GlassProps) {
           </defs>
         </svg>
       )}
-      {/* Fallback rim/specular: the baked highlight that gives the frosted box a
-          lit, bevelled glass edge in browsers that can't refract. */}
-      {!canRefract && overlayUrl && (
+      {/* Frosted fallback rim/specular: the baked highlight that gives the
+          frosted box a lit, bevelled glass edge. Only used when we have neither
+          refraction path (no backdrop selector on a non-Chromium engine). */}
+      {frostedFallback && overlayUrl && (
         <div
           className="gk-glass__rim"
           style={{

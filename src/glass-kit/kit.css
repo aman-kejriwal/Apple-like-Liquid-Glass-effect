@@ -64,6 +64,39 @@
   z-index: 1;
 }
 
+/* WebKit/Firefox real-refraction layer: a live clone of the page backdrop,
+   clipped to the lens and displaced via `filter: url()` (which these engines DO
+   run, unlike backdrop-filter). Positioned by useBackdropRefraction so the slice
+   lines up with the real content behind the glass. Sits above the tint, below
+   the sheen and content. */
+.gk-glass__refraction {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  /* filter is set inline (the per-bake url(#id)). */
+}
+
+.gk-glass__refraction-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+  will-change: transform;
+}
+
+.gk-glass__refraction-inner > * {
+  /* The clone fills the inner (which is sized to the real backdrop's box), laid
+     out from the top-left regardless of how the original was positioned. */
+  position: static !important;
+  inset: auto !important;
+  margin: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
 /* ---------------------------------------------------------------- draggable */
 
 .gk-draggable {
