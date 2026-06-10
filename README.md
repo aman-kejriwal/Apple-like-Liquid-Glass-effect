@@ -68,7 +68,7 @@ There are hooks too (`useDraggable`, `useMorphActive`) and the raw displacement-
 
 ## How it works
 
-One SVG primitive does the heavy lifting: `feDisplacementMap`, applied through `backdrop-filter` so it warps the live page content behind the element rather than a screenshot of it.
+One SVG primitive does the heavy lifting: `feDisplacementMap`, applied through `backdrop-filter` so it warps the live page content behind the element rather than a screenshot of it. On engines that can't run an SVG filter through `backdrop-filter` (Safari, Firefox) the kit detects that at runtime and renders a frosted-glass fallback instead — see [Browser support](#browser-support).
 
 The trick is the displacement map. The kit draws one procedurally on a `<canvas>`: a signed-distance rounded rectangle where the red and green channels encode the surface normal (which way each pixel pushes the light) and the blue channel carries a specular highlight. Feed that into the SVG filter, run the displacement three times for a touch of chromatic aberration on the edges, and you get glass that bevels light at its rim. The maths for that map is ported from Aave's own bundle. credit where it's due, it's their geometry, I just made it legible and reusable.
 
@@ -85,11 +85,41 @@ I'd rather tell you the limits up front than have you find them.
 - Take a beating from your pointer. drag, slide, toggle, all on pointer events, so it works with touch too.
 
 **It can't (yet), or won't do well:**
-- **Safari and Firefox are the weak spot.** This leans on `backdrop-filter: url(#svg-filter)`, which Chromium renders properly (Chrome, Edge, Arc, Brave) and the others largely don't. Outside Chromium you'll usually get a plain frosted look instead of true refraction. `Glass` takes a `sample` prop as an escape hatch (it filters a live DOM copy, which Safari *will* run), but the demo doesn't wire it up, so treat non-Chromium as "degrades gracefully," not "identical."
-- **It's not a hundreds-of-instances effect.** Each glass surface is its own SVG filter and its own backdrop pass. Grand for a UI's worth of controls, not for tiling 200 of them. it's GPU work.
+- **True refraction is Chromium-only; the rest get a real frosted fallback.** See [Browser support](#browser-support) for the full story. Short version: Chromium refracts; Safari and Firefox now get a proper frosted-blur-plus-lit-rim fallback (not the old flat tint), chosen automatically.
+- **It's not a hundreds-of-instances effect.** Each glass surface is its own SVG filter and its own backdrop pass. Grand for a UI's worth of controls, not for tiling 200 of them. it's GPU work. Off-screen lenses pause their backdrop pass automatically (IntersectionObserver), and identical lenses share one baked displacement map, so a normal UI's worth is comfortable.
 - **Heavy blur muddies it.** Blur defaults to 0 on purpose. The refraction is the point; crank the blur and you bury it. There's a slider in the demo so you can see exactly where it stops looking good.
 - **It's not on npm and it's not "done."** No published package, no test suite, no Safari-first path. It's a working kit and an honest starting point, not a 1.0.
 - **It won't bend a live video at zero cost.** A video behind the glass *does* refract in Chromium, but per-frame backdrop work on video is exactly where this approach gets expensive. Aave used a dedicated WebGL pass for their video player for that reason, and I haven't rebuilt that part here.
+
+## Browser support
+
+| Engine | What you get |
+|---|---|
+| **Chromium** (Chrome, Edge, Arc, Brave) | Full live refraction. `feDisplacementMap` runs through `backdrop-filter` against the real content behind the lens. |
+| **Safari / WebKit** (incl. all iOS browsers) | Frosted-glass fallback: a real `backdrop-filter: blur()` plus a baked specular/edge rim, so it reads as lit glass — not the flat tint earlier versions left behind. No live refraction (see below). |
+| **Firefox** | Same frosted fallback as Safari. |
+
+**Why Safari can't refract.** WebKit parses `backdrop-filter: url(#svg-filter)` — `getComputedStyle` even echoes it back — but never runs the SVG filter against the backdrop, so you get nothing. There's no media query for this, so the kit detects the engine at runtime ([`supportsBackdropDisplacement()`](src/glass-kit/support.ts)) and renders the fallback automatically. WebKit *does* run an SVG filter applied as a regular `filter:` (not `backdrop-filter:`), which is why the `sample` escape hatch below works there: it filters a live DOM copy. Doing that for an arbitrary backdrop would mean snapshotting the page (`html2canvas`) or a WebGL pass, neither of which this kit does on principle.
+
+**The `sample` escape hatch.** If you control the content behind a lens, pass it (and its size/offset) via the `sample` props. The kit filters that copy with the same displacement chain through a regular `filter:`, which Safari *will* run — giving real refraction in WebKit for that specific case. The Safari filter-id caching bug (it caches filter output by id and freezes on a stale map) is handled: every bake gets a fresh id.
+
+### Performance
+
+The expensive part — baking the displacement map — runs only when a lens's parameters change, never per frame and never on scroll. On top of that:
+
+- **Identical lenses share one baked map** (`getDisplacementMap` memoises across instances), so a panel full of same-spec thumbs and buttons bakes once, not N times.
+- **Bake resolution is capped to the on-screen size** (`resolveMapSize`): a 24px slider thumb no longer bakes a 512² map.
+- **Off-screen lenses drop their backdrop pass** to `none` via IntersectionObserver, so a long page doesn't keep paying for filters you can't see.
+
+Rough frame times on the demo (27-photo backdrop, 18 live lenses, 1440×900 @2×, Playwright):
+
+| | idle | while scrolling |
+|---|---|---|
+| Chromium, before | ~17 ms (60 fps) | ~300 ms/frame |
+| Chromium, after | ~17 ms (60 fps) | ~180–200 ms/frame |
+| Safari, after | ~17 ms (60 fps) | ~17 ms (fallback is cheap) |
+
+Scrolling a wall of live Chromium backdrop-filters over full-res photos is still GPU-bound — that's inherent to refracting live content, not a bug. The kit-level work above keeps a normal UI's worth of controls smooth; tiling hundreds of lenses over a heavy backdrop will still cost you.
 
 ## How it compares
 
@@ -97,7 +127,7 @@ There's a small pile of "liquid glass for the web" repos now. Most of them appea
 
 | Project | Technique | React kit of controls? | Notes |
 |---|---|---|---|
-| **refract** (this) | CSS `backdrop-filter` + SVG `feDisplacementMap` over live DOM | **Yes** | The whole point is the components and the morph-on-touch behaviour, not just one glass panel. Chromium-first. |
+| **refract** (this) | CSS `backdrop-filter` + SVG `feDisplacementMap` over live DOM | **Yes** | The whole point is the components and the morph-on-touch behaviour, not just one glass panel. Chromium refracts; Safari/Firefox get an automatic frosted fallback. |
 | [shuding/liquid-glass](https://github.com/shuding/liquid-glass) | Same CSS + SVG displacement approach | No | Brilliant, tiny, copy-paste-into-the-console primitive. A single glass surface, not a component set. Closest cousin technically. |
 | [nikdelvin/liquid-glass](https://github.com/nikdelvin/liquid-glass) | CSS + SVG (displacement, blur, colour matrix) | No (Astro/Tailwind) | Pixel-chasing an iOS 26 look. Falls back to plain glassmorphism on Safari, same wall I hit. |
 | [AndrewPrifer/liquid-dom](https://github.com/AndrewPrifer/liquid-dom) | WebGPU, renders live DOM into GPU textures | Partly (React/Three bindings) | The most advanced of the lot and the least portable. needs WebGPU and a Chrome experimental flag on. |
