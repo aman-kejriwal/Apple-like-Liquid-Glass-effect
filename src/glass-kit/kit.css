@@ -42,6 +42,20 @@
   z-index: 2;
 }
 
+/* Fallback rim: baked specular/edge highlight laid over the frosted blur in
+   browsers that can't refract through backdrop-filter (Safari, Firefox). Gives
+   the box a lit glass edge instead of a flat tint. */
+.gk-glass__rim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: inherit;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  mix-blend-mode: screen;
+}
+
 .gk-glass__sample {
   position: absolute;
   inset: 0;

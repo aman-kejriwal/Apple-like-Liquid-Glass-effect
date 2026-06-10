@@ -3,15 +3,18 @@ import {
   type PropsWithChildren,
   type ReactNode,
   useEffect,
-  useId,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
-  generateDisplacementMap,
+  getDisplacementMap,
+  getHighlightOverlay,
   mapScaleMatrix,
+  resolveMapSize,
   type DisplacementMapOptions,
 } from "./displacement";
+import { supportsBackdropDisplacement } from "./support";
 
 export type GlassProps = PropsWithChildren<{
   /** rendered box size in px */
@@ -85,9 +88,17 @@ const DEFAULTS = {
   shadowOpacity: 0.22,
 } satisfies Partial<GlassProps>;
 
+// Module-scoped counter for unique, render-stable filter ids without useId
+// quirks. Each bake gets a fresh suffix (Safari caches SVG filters by id and
+// will otherwise freeze on a stale map — see the bake effect below).
+let filterSeq = 0;
+
 /**
- * The core lens. Applies an SVG displacement filter via `backdrop-filter` so it
- * refracts the real, live page content painted behind it.
+ * The core lens. On Chromium it applies an SVG displacement filter via
+ * `backdrop-filter` so it refracts the real, live page content painted behind
+ * it. On Safari/Firefox — which parse `backdrop-filter: url()` but never run the
+ * filter against the backdrop — it degrades to a frosted blur with a baked
+ * specular rim so it still reads as glass rather than a flat tint.
  *
  * NB: a CSS `filter` on ANY ancestor flattens the subtree and stops
  * backdrop-filter from sampling — never wrap Glass in a `filter`. `transform`
@@ -111,7 +122,7 @@ export function Glass(props: GlassProps) {
   const lensHalfHeight = props.lensH ?? height / 2;
   const borderRadius =
     props.borderRadius ?? Math.min(lensHalfWidth, lensHalfHeight) * 0.42;
-  const mapSize = props.mapSize ?? DEFAULTS.mapSize;
+  const requestedMapSize = props.mapSize ?? DEFAULTS.mapSize;
   const depth = props.depth ?? DEFAULTS.depth;
   const scaleX = props.scaleX ?? DEFAULTS.scaleX;
   const scaleY = props.scaleY ?? DEFAULTS.scaleY;
@@ -122,9 +133,27 @@ export function Glass(props: GlassProps) {
   const tintOpacity = props.tintOpacity ?? DEFAULTS.tintOpacity;
   const shadowOpacity = props.shadowOpacity ?? DEFAULTS.shadowOpacity;
 
-  const filterUid = useId().replace(/:/g, "");
-  const filterId = `gk-glass-${filterUid}`;
+  // Cap the bake to what the on-screen size can actually show. A 24px thumb
+  // gains nothing from a 512² map.
+  const mapSize = resolveMapSize(
+    requestedMapSize,
+    lensHalfWidth,
+    lensHalfHeight,
+  );
+
+  // Capability is detected on the client. SSR / first paint assumes the safe
+  // fallback (false), then we confirm on mount so Chromium upgrades to true
+  // refraction without a hydration mismatch on the filter url.
+  const [canRefract, setCanRefract] = useState(false);
+  useEffect(() => {
+    setCanRefract(supportsBackdropDisplacement());
+  }, []);
+
+  // Fresh filter id every time the map changes. Stable ids freeze the lens in
+  // Safari (it caches filter output by id); a new id forces a re-render.
+  const [filterId, setFilterId] = useState("");
   const [mapUrl, setMapUrl] = useState("");
+  const [overlayUrl, setOverlayUrl] = useState("");
 
   const mapOptions = useMemo<DisplacementMapOptions>(
     () => ({
@@ -153,77 +182,126 @@ export function Glass(props: GlassProps) {
     ],
   );
 
+  // Bake the map (refracting browsers) or the highlight overlay (fallback). The
+  // bake is the only expensive bit and runs solely when params change — never
+  // per frame, never on scroll.
   useEffect(() => {
-    setMapUrl(generateDisplacementMap(mapOptions));
-  }, [mapOptions]);
+    if (canRefract) {
+      const url = getDisplacementMap(mapOptions);
+      setMapUrl(url);
+      filterSeq += 1;
+      setFilterId(`gk-glass-${filterSeq}`);
+    } else {
+      setOverlayUrl(getHighlightOverlay(mapOptions));
+    }
+  }, [mapOptions, canRefract]);
+
+  // Pause the (GPU-expensive) backdrop pass while the lens is scrolled out of
+  // view. backdrop-filter re-runs every frame the backdrop changes even when
+  // the element is off-screen, so dropping it back to `none` recovers real work
+  // on long pages.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [onScreen, setOnScreen] = useState(true);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      (entries) => setOnScreen(entries[0]?.isIntersecting ?? true),
+      { rootMargin: "200px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
 
   const displacementScale = Math.max(scaleX, scaleY);
   const matrixScaleX = displacementScale > 0 ? scaleX / displacementScale : 0;
   const matrixScaleY = displacementScale > 0 ? scaleY / displacementScale : 0;
   const colorMatrix = mapScaleMatrix(matrixScaleX, matrixScaleY);
-  const backdropFilter = mapUrl
-    ? `url(#${filterId})${blurAmount > 0 ? ` blur(${blurAmount}px)` : ""}`
-    : blurAmount > 0
-      ? `blur(${blurAmount}px)`
-      : "none";
-  const sampleFilter = mapUrl ? `url(#${filterId})` : "none";
+
+  const filterReady = canRefract && mapUrl && filterId;
+
+  // backdrop-filter value. Off-screen → none (skip the pass entirely).
+  let backdropFilter: string;
+  if (!onScreen) {
+    backdropFilter = "none";
+  } else if (filterReady) {
+    backdropFilter = `url(#${filterId})${blurAmount > 0 ? ` blur(${blurAmount}px)` : ""}`;
+  } else if (!canRefract) {
+    // Fallback: a real frosted blur (the rim highlight comes from the overlay).
+    backdropFilter = `blur(${Math.max(blurAmount, 8)}px) saturate(1.4)`;
+  } else if (blurAmount > 0) {
+    backdropFilter = `blur(${blurAmount}px)`;
+  } else {
+    backdropFilter = "none";
+  }
+  const sampleFilter = filterReady ? `url(#${filterId})` : "none";
 
   return (
     <div
-      className={`gk-glass ${className ?? ""}`}
+      ref={rootRef}
+      className={`gk-glass ${canRefract ? "" : "gk-glass--fallback"} ${className ?? ""}`}
       style={{
         width,
         height,
         borderRadius,
-        background: `rgba(${tintColor} / ${tintOpacity})`,
+        background: `rgba(${tintColor} / ${canRefract ? tintOpacity : tintOpacity + 0.06})`,
         boxShadow: `0 24px 80px rgba(8, 15, 35, ${shadowOpacity}), inset 0 0 0 1px rgba(255,255,255,.55), inset 0 -16px 34px rgba(255,255,255,.18)`,
         backdropFilter,
         WebkitBackdropFilter: backdropFilter,
         ...style,
       }}
     >
-      <svg aria-hidden="true" className="gk-glass__defs" focusable="false" width="0" height="0">
-        <defs>
-          <filter
-            id={filterId}
-            filterUnits="objectBoundingBox"
-            primitiveUnits="objectBoundingBox"
-            colorInterpolationFilters="sRGB"
-            x="0" y="0" width="1" height="1"
-          >
-            {mapUrl && (
-              <>
-                <feFlood floodColor="rgb(128,128,128)" floodOpacity="1" result="mapBg" />
-                <feImage href={mapUrl} preserveAspectRatio="none" result="rawMap" />
-                <feComposite in="rawMap" in2="mapBg" operator="over" result="map" />
-                <feColorMatrix in="map" type="matrix" values={colorMatrix} result="scaledMap" />
-                {blurAmount > 0 && (
-                  <feGaussianBlur in="SourceGraphic" stdDeviation={`${blurAmount / width} ${blurAmount / height}`} result="blurred" />
-                )}
-                {chromaAmount > 0 ? (
-                  <>
-                    <feDisplacementMap in={blurAmount > 0 ? "blurred" : "SourceGraphic"} in2="scaledMap" scale={displacementScale * (1 + 0.2 * chromaAmount)} xChannelSelector="R" yChannelSelector="G" />
-                    <feColorMatrix type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="dispR" />
-                    <feDisplacementMap in={blurAmount > 0 ? "blurred" : "SourceGraphic"} in2="scaledMap" scale={displacementScale * (1 + 0.1 * chromaAmount)} xChannelSelector="R" yChannelSelector="G" />
-                    <feColorMatrix type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="dispG" />
-                    <feDisplacementMap in={blurAmount > 0 ? "blurred" : "SourceGraphic"} in2="scaledMap" scale={displacementScale} xChannelSelector="R" yChannelSelector="G" />
-                    <feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="dispB" />
-                    <feComposite in="dispR" in2="dispG" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" />
-                    <feComposite in2="dispB" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" result="lensResult" />
-                  </>
-                ) : (
-                  <feDisplacementMap in={blurAmount > 0 ? "blurred" : "SourceGraphic"} in2="scaledMap" scale={displacementScale} xChannelSelector="R" yChannelSelector="G" result="lensResult" />
-                )}
-                <feColorMatrix in="map" type="matrix" values={`0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 1 0 ${-128 / 255}`} result="specMask" />
-                <feComposite in="specMask" in2="lensResult" operator="arithmetic" k1="0" k2={specularStrength} k3="1" k4="0" result="lensResult" />
-                <feFlood floodColor="black" floodOpacity="1" result="lensMask" />
-                <feComposite in="SourceGraphic" in2="lensMask" operator="out" result="holedSource" />
-                <feComposite in="lensResult" in2="holedSource" operator="over" />
-              </>
-            )}
-          </filter>
-        </defs>
-      </svg>
+      {filterReady && (
+        <svg aria-hidden="true" className="gk-glass__defs" focusable="false" width="0" height="0">
+          <defs>
+            <filter
+              id={filterId}
+              filterUnits="objectBoundingBox"
+              primitiveUnits="objectBoundingBox"
+              colorInterpolationFilters="sRGB"
+              x="0" y="0" width="1" height="1"
+            >
+              <feFlood floodColor="rgb(128,128,128)" floodOpacity="1" result="mapBg" />
+              <feImage href={mapUrl} preserveAspectRatio="none" result="rawMap" />
+              <feComposite in="rawMap" in2="mapBg" operator="over" result="map" />
+              <feColorMatrix in="map" type="matrix" values={colorMatrix} result="scaledMap" />
+              {blurAmount > 0 && (
+                <feGaussianBlur in="SourceGraphic" stdDeviation={`${blurAmount / width} ${blurAmount / height}`} result="blurred" />
+              )}
+              {chromaAmount > 0 ? (
+                <>
+                  <feDisplacementMap in={blurAmount > 0 ? "blurred" : "SourceGraphic"} in2="scaledMap" scale={displacementScale * (1 + 0.2 * chromaAmount)} xChannelSelector="R" yChannelSelector="G" />
+                  <feColorMatrix type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="dispR" />
+                  <feDisplacementMap in={blurAmount > 0 ? "blurred" : "SourceGraphic"} in2="scaledMap" scale={displacementScale * (1 + 0.1 * chromaAmount)} xChannelSelector="R" yChannelSelector="G" />
+                  <feColorMatrix type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="dispG" />
+                  <feDisplacementMap in={blurAmount > 0 ? "blurred" : "SourceGraphic"} in2="scaledMap" scale={displacementScale} xChannelSelector="R" yChannelSelector="G" />
+                  <feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="dispB" />
+                  <feComposite in="dispR" in2="dispG" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" />
+                  <feComposite in2="dispB" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" result="lensResult" />
+                </>
+              ) : (
+                <feDisplacementMap in={blurAmount > 0 ? "blurred" : "SourceGraphic"} in2="scaledMap" scale={displacementScale} xChannelSelector="R" yChannelSelector="G" result="lensResult" />
+              )}
+              <feColorMatrix in="map" type="matrix" values={`0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 1 0 ${-128 / 255}`} result="specMask" />
+              <feComposite in="specMask" in2="lensResult" operator="arithmetic" k1="0" k2={specularStrength} k3="1" k4="0" result="lensResult" />
+              <feFlood floodColor="black" floodOpacity="1" result="lensMask" />
+              <feComposite in="SourceGraphic" in2="lensMask" operator="out" result="holedSource" />
+              <feComposite in="lensResult" in2="holedSource" operator="over" />
+            </filter>
+          </defs>
+        </svg>
+      )}
+      {/* Fallback rim/specular: the baked highlight that gives the frosted box a
+          lit, bevelled glass edge in browsers that can't refract. */}
+      {!canRefract && overlayUrl && (
+        <div
+          className="gk-glass__rim"
+          style={{
+            backgroundImage: `url(${overlayUrl})`,
+            opacity: Math.min(1, 0.5 * specularStrength),
+          }}
+        />
+      )}
       {sample && (
         <div className="gk-glass__sample" style={{ filter: sampleFilter }}>
           <div
