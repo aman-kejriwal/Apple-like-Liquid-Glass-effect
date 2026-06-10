@@ -245,6 +245,161 @@ export function generateDisplacementMap(options: DisplacementMapOptions) {
   return canvas.toDataURL("image/png");
 }
 
+/**
+ * Cross-instance cache for baked displacement maps. Baking a 512² map costs a
+ * few milliseconds of main-thread work and a `toDataURL` encode; a real UI
+ * mounts many lenses that share identical parameters (every slider thumb, every
+ * button). Keying on the full option set lets those collapse to a single bake.
+ */
+const mapCache = new Map<string, string>();
+
+function cacheKey(options: DisplacementMapOptions): string {
+  // Stable key over every field that affects the pixels. Order is fixed.
+  return [
+    options.canvasSize,
+    options.lensHalfWidth,
+    options.lensHalfHeight,
+    options.borderRadius,
+    options.depth,
+    options.sdfBoundary ? 1 : 0,
+    options.edgeFalloff ? 1 : 0,
+    options.specularRotation,
+    options.glowStrength,
+    options.glowSpread,
+    options.glowExponent,
+    options.edgeStrength,
+    options.edgeWidth,
+    options.edgeExponent,
+    options.domeDepth,
+    options.splayAmount,
+  ].join("|");
+}
+
+/**
+ * Memoised {@link generateDisplacementMap}. Identical lenses share one baked
+ * data URL instead of each re-running the pixel loop. Prefer this over calling
+ * `generateDisplacementMap` directly when many lenses may share parameters.
+ */
+export function getDisplacementMap(options: DisplacementMapOptions): string {
+  const key = cacheKey(options);
+  const hit = mapCache.get(key);
+  if (hit !== undefined) return hit;
+  const url = generateDisplacementMap(options);
+  // Don't cache failures (e.g. no 2D context yet).
+  if (url) mapCache.set(key, url);
+  return url;
+}
+
+/**
+ * Bake just the rim + specular highlight of the lens as a transparent PNG, with
+ * the highlight strength written into the alpha channel (white pixels). This is
+ * the fallback layer for browsers that can't refract through `backdrop-filter`
+ * (Safari, Firefox): laid over a plain `blur()` it gives the glass a lit, bevelled
+ * edge instead of a flat tinted box, so it still reads as glass.
+ */
+export function generateHighlightOverlay(options: DisplacementMapOptions): string {
+  const {
+    canvasSize,
+    lensHalfWidth,
+    lensHalfHeight,
+    borderRadius,
+    depth,
+    edgeFalloff,
+    specularRotation,
+    glowStrength,
+    glowSpread,
+    glowExponent,
+    edgeStrength,
+    edgeWidth,
+    edgeExponent,
+  } = options;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = canvasSize;
+  canvas.height = canvasSize;
+  const context = canvas.getContext("2d");
+  if (!context) return "";
+
+  const imageData = context.createImageData(canvasSize, canvasSize);
+  const radius = Math.min(borderRadius, lensHalfWidth, lensHalfHeight);
+  const innerHalfWidth = Math.max(0, lensHalfWidth - depth);
+  const innerHalfHeight = Math.max(0, lensHalfHeight - depth);
+  const innerRadius = Math.max(0, Math.min(borderRadius, innerHalfWidth, innerHalfHeight));
+  const falloffScale = depth > 0 ? 1 / (depth * Math.SQRT2) : 1e6;
+  const rotationRadians = (specularRotation * Math.PI) / 180;
+  const specularCos = Math.cos(rotationRadians);
+  const specularSin = Math.sin(rotationRadians);
+  const glowStart = (1 - glowSpread) * Math.SQRT2;
+  const glowRange = glowSpread * Math.SQRT2;
+
+  for (let pixelY = 0; pixelY < canvasSize; pixelY += 1) {
+    for (let pixelX = 0; pixelX < canvasSize; pixelX += 1) {
+      const index = (pixelY * canvasSize + pixelX) * 4;
+      const x = ((pixelX + 0.5) / canvasSize) * (2 * lensHalfWidth) - lensHalfWidth;
+      const y = ((pixelY + 0.5) / canvasSize) * (2 * lensHalfHeight) - lensHalfHeight;
+      const outerDistance = roundedRectSdf(x, y, lensHalfWidth, lensHalfHeight, radius);
+
+      let bevelMix = 1;
+      if (edgeFalloff) {
+        const innerDistance = roundedRectSdf(x, y, innerHalfWidth, innerHalfHeight, innerRadius);
+        bevelMix = 0.5 * (1 + erf(innerDistance * falloffScale));
+      }
+
+      const diagonal = Math.abs(
+        clamp(x / lensHalfWidth, -1, 1) * specularCos +
+          clamp(y / lensHalfHeight, -1, 1) * specularSin,
+      );
+      let specular = 0;
+      if (glowStrength > 0) {
+        const glow = glowRange > 0.001 ? clamp((diagonal - glowStart) / glowRange, 0, 1) : 0;
+        specular += glowStrength * Math.pow(glow, glowExponent) * bevelMix;
+      }
+      if (edgeStrength > 0) {
+        const edge = outerDistance < 0 ? Math.max(0, 1 + outerDistance / edgeWidth) : 0;
+        specular += edgeStrength * edge * Math.pow(diagonal, edgeExponent) * bevelMix;
+      }
+      const a = outerDistance >= 0 ? 0 : Math.round(255 * Math.min(1, specular));
+      imageData.data[index] = 255;
+      imageData.data[index + 1] = 255;
+      imageData.data[index + 2] = 255;
+      imageData.data[index + 3] = a;
+    }
+  }
+
+  context.putImageData(imageData, 0, 0);
+  return canvas.toDataURL("image/png");
+}
+
+const overlayCache = new Map<string, string>();
+
+/** Memoised {@link generateHighlightOverlay}. */
+export function getHighlightOverlay(options: DisplacementMapOptions): string {
+  const key = `hl|${cacheKey(options)}`;
+  const hit = overlayCache.get(key);
+  if (hit !== undefined) return hit;
+  const url = generateHighlightOverlay(options);
+  if (url) overlayCache.set(key, url);
+  return url;
+}
+
+/**
+ * Pick a sensible bake resolution for a lens of a given on-screen size. A 24px
+ * slider thumb gains nothing from a 512² map; capping the bake to roughly twice
+ * the largest on-screen dimension keeps small lenses cheap without softening
+ * large panels. `requested` (the explicit `mapSize` prop) is honoured as a
+ * ceiling so callers can still force a specific resolution down.
+ */
+export function resolveMapSize(
+  requested: number,
+  lensHalfWidth: number,
+  lensHalfHeight: number,
+): number {
+  const onScreen = 2 * Math.max(lensHalfWidth, lensHalfHeight);
+  // 2x for a little crispness headroom, rounded to a multiple of 32, clamped.
+  const fit = Math.ceil((onScreen * 2) / 32) * 32;
+  return Math.max(64, Math.min(requested, fit));
+}
+
 export function mapScaleMatrix(scaleX: number, scaleY: number) {
   return `${scaleX} 0 0 0 ${0.5 * (1 - scaleX)}
           0 ${scaleY} 0 0 ${0.5 * (1 - scaleY)}
