@@ -22,9 +22,15 @@ export { useMorphActive } from "./useMorphActive";
 
 export {
   generateDisplacementMap,
+  getDisplacementMap,
+  generateHighlightOverlay,
+  getHighlightOverlay,
+  resolveMapSize,
   erf,
   computeDomeConstants,
   domeGradient,
   mapScaleMatrix,
 } from "./displacement";
 export type { DisplacementMapOptions } from "./displacement";
+
+export { supportsBackdropDisplacement } from "./support";

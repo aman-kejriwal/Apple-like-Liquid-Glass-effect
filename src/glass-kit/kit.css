@@ -42,12 +42,59 @@
   z-index: 2;
 }
 
+/* Fallback rim: baked specular/edge highlight laid over the frosted blur in
+   browsers that can't refract through backdrop-filter (Safari, Firefox). Gives
+   the box a lit glass edge instead of a flat tint. */
+.gk-glass__rim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: inherit;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  mix-blend-mode: screen;
+}
+
 .gk-glass__sample {
   position: absolute;
   inset: 0;
   overflow: hidden;
   border-radius: inherit;
   z-index: 1;
+}
+
+/* WebKit/Firefox real-refraction layer: a live clone of the page backdrop,
+   clipped to the lens and displaced via `filter: url()` (which these engines DO
+   run, unlike backdrop-filter). Positioned by useBackdropRefraction so the slice
+   lines up with the real content behind the glass. Sits above the tint, below
+   the sheen and content. */
+.gk-glass__refraction {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  /* filter is set inline (the per-bake url(#id)). */
+}
+
+.gk-glass__refraction-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+  will-change: transform;
+}
+
+.gk-glass__refraction-inner > * {
+  /* The clone fills the inner (which is sized to the real backdrop's box), laid
+     out from the top-left regardless of how the original was positioned. */
+  position: static !important;
+  inset: auto !important;
+  margin: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 /* ---------------------------------------------------------------- draggable */
