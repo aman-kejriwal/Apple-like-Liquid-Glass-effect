@@ -7,7 +7,7 @@ import {
   useTransform,
   useVelocity,
 } from "framer-motion";
-import { Glass } from "./Glass";
+import { Glass, type GlassProps } from "./Glass";
 import { useMorphActive } from "./useMorphActive";
 
 const TRACK_W = 264;
@@ -30,6 +30,12 @@ export function GlassSlider({
   onChange,
   display,
   blurAmount = 0,
+  depth = 7,
+  chromaAmount = 0.8,
+  specularStrength = 1.5,
+  tintOpacity = 0.05,
+  backdropSelector,
+  ...glassProps
 }: {
   label?: string;
   value: number;
@@ -38,8 +44,9 @@ export function GlassSlider({
   step?: number;
   onChange: (v: number) => void;
   display?: string;
-  blurAmount?: number;
-}) {
+  scaleX?: number;
+  scaleY?: number;
+} & Omit<GlassProps, "width" | "height" | "borderRadius" | "children">) {
   const hitRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   const { active, engage, release } = useMorphActive();
@@ -54,8 +61,8 @@ export function GlassSlider({
   useEffect(() => {
     const controls = animate(press, active ? 1 : 0, {
       type: "spring",
-      stiffness: 420,
-      damping: 24,
+      stiffness: 600,
+      damping: 28,
     });
     return controls.stop;
   }, [active, press]);
@@ -136,10 +143,13 @@ export function GlassSlider({
             height={THUMB}
             borderRadius={THUMB / 2}
             blurAmount={blurAmount}
-            depth={5}
-            chromaAmount={0.9}
-            specularStrength={1.7}
-            tintOpacity={0.05}
+            depth={depth}
+            chromaAmount={chromaAmount}
+            specularStrength={specularStrength}
+            tintOpacity={tintOpacity}
+            backdropSelector={backdropSelector}
+            forceClone={true}
+            {...glassProps}
           />
           <motion.div className="gk-slider__thumbskin" style={{ opacity: skinOpacity }} />
         </motion.div>

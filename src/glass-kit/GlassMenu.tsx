@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Glass } from "./Glass";
+import { Glass, type GlassProps } from "./Glass";
 
 const WIDTH = 216;
 const TRIGGER_H = 54;
@@ -18,11 +18,18 @@ export function GlassMenu({
   label,
   items,
   blurAmount = 0,
+  depth = 9,
+  chromaAmount = 0.85,
+  specularStrength = 1.4,
+  tintOpacity = 0.06,
+  scaleX = 0.15,
+  scaleY = 0.15,
+  backdropSelector,
+  ...glassProps
 }: {
   label: string;
   items: (MenuItem | string)[];
-  blurAmount?: number;
-}) {
+} & Omit<GlassProps, "width" | "height" | "borderRadius" | "children">) {
   const [open, setOpen] = useState(false);
   const norm = items.map((it) => (typeof it === "string" ? { label: it } : it));
   const openH = TRIGGER_H + norm.length * ROW_H + 8;
@@ -41,10 +48,14 @@ export function GlassMenu({
           height={openH}
           borderRadius={24}
           blurAmount={blurAmount}
-          depth={9}
-          chromaAmount={0.85}
-          specularStrength={1.4}
-          tintOpacity={0.06}
+          depth={depth}
+          chromaAmount={chromaAmount}
+          specularStrength={specularStrength}
+          tintOpacity={tintOpacity}
+          scaleX={scaleX}
+          scaleY={scaleY}
+          backdropSelector={backdropSelector}
+          {...glassProps}
         />
         <button
           type="button"

@@ -1,6 +1,6 @@
 import { type ReactNode } from "react";
 import { motion } from "framer-motion";
-import { Glass } from "./Glass";
+import { Glass, type GlassProps } from "./Glass";
 import { useMorphActive } from "./useMorphActive";
 
 /**
@@ -14,15 +14,22 @@ export function GlassButton({
   width = 128,
   height = 50,
   blurAmount = 0,
+  depth = 7,
+  chromaAmount = 0.8,
+  specularStrength = 1.5,
+  tintOpacity = 0.05,
+  scaleX = 0.25,
+  scaleY = 0.25,
+  backdropSelector,
   className,
+  ...glassProps
 }: {
   children: ReactNode;
   onClick?: () => void;
   width?: number;
   height?: number;
-  blurAmount?: number;
   className?: string;
-}) {
+} & Omit<GlassProps, "width" | "height" | "borderRadius" | "children">) {
   const { active, engage, release } = useMorphActive();
   const radius = height / 2;
 
@@ -38,10 +45,14 @@ export function GlassButton({
         height={height}
         borderRadius={radius}
         blurAmount={blurAmount}
-        depth={7}
-        chromaAmount={0.8}
-        specularStrength={1.5}
-        tintOpacity={0.05}
+        depth={depth}
+        chromaAmount={chromaAmount}
+        specularStrength={specularStrength}
+        tintOpacity={tintOpacity}
+        scaleX={scaleX}
+        scaleY={scaleY}
+        backdropSelector={backdropSelector}
+        {...glassProps}
       />
       <motion.div
         className="gk-button__skin"

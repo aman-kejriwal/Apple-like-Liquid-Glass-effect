@@ -7,7 +7,7 @@ import {
   useTransform,
   useVelocity,
 } from "framer-motion";
-import { Glass } from "./Glass";
+import { Glass, type GlassProps } from "./Glass";
 
 const TAB_W = 96;
 const TAB_H = 44;
@@ -26,12 +26,17 @@ export function GlassSegmented({
   value,
   onChange,
   blurAmount = 0,
+  depth = 10,
+  chromaAmount = 0.85,
+  specularStrength = 1.5,
+  tintOpacity = 0.2,
+  backdropSelector,
+  ...glassProps
 }: {
   tabs: string[];
   value?: number;
   onChange?: (index: number) => void;
-  blurAmount?: number;
-}) {
+} & Omit<GlassProps, "width" | "height" | "borderRadius" | "children">) {
   const [internal, setInternal] = useState(0);
   const active = value ?? internal;
   const barRef = useRef<HTMLDivElement>(null);
@@ -93,10 +98,13 @@ export function GlassSegmented({
           height={TAB_H}
           borderRadius={TAB_H / 2}
           blurAmount={blurAmount}
-          depth={10}
-          chromaAmount={0.85}
-          specularStrength={1.5}
-          tintOpacity={0.2}
+          depth={depth}
+          chromaAmount={chromaAmount}
+          specularStrength={specularStrength}
+          tintOpacity={tintOpacity}
+          backdropSelector={backdropSelector}
+          forceClone={true}
+          {...glassProps}
         />
       </motion.div>
       {tabs.map((tab, i) => (

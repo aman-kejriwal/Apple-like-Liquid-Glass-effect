@@ -73,6 +73,7 @@ export type GlassProps = PropsWithChildren<{
    * Chromium ignores this and uses its native backdrop-filter path.
    */
   backdropSelector?: string;
+  forceClone?: boolean;
 }>;
 
 const DEFAULTS = {
@@ -171,7 +172,8 @@ export function Glass(props: GlassProps) {
   // backdrop, we clone that slice into the lens and filter the clone — real
   // refraction of real content. Only on the non-Chromium path, only when we have
   // a backdrop to sample, and only after mount (needs the live DOM).
-  const useCloneRefraction = mounted && !canRefract && !!backdropSelector;
+  const useCloneRefraction =
+    mounted && (!canRefract || !!props.forceClone) && !!backdropSelector;
 
   const reduceMotion =
     typeof window !== "undefined" &&
@@ -256,7 +258,7 @@ export function Glass(props: GlassProps) {
   // path is active and the map has baked.
   const filterDefined = willRefract && !!mapUrl && !!filterId;
   // Chromium refracts the live backdrop directly through backdrop-filter.
-  const backdropDisplace = canRefract && filterDefined;
+  const backdropDisplace = canRefract && filterDefined && !props.forceClone;
 
   // backdrop-filter value. Off-screen → none (skip the pass entirely).
   let backdropFilter: string;

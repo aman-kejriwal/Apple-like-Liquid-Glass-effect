@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Glass } from "./Glass";
+import { Glass, type GlassProps } from "./Glass";
 import { useMorphActive } from "./useMorphActive";
 
 const W = 64;
@@ -16,11 +16,18 @@ export function GlassSwitch({
   checked,
   onChange,
   blurAmount = 0,
+  depth = 5,
+  chromaAmount = 0.9,
+  specularStrength = 1.7,
+  tintOpacity = 0.04,
+  scaleX = 0.75,
+  scaleY = 0.75,
+  backdropSelector,
+  ...glassProps
 }: {
   checked: boolean;
   onChange: (next: boolean) => void;
-  blurAmount?: number;
-}) {
+} & Omit<GlassProps, "width" | "height" | "borderRadius" | "children">) {
   const { active, engage, release } = useMorphActive(320);
 
   return (
@@ -52,10 +59,14 @@ export function GlassSwitch({
           height={KNOB}
           borderRadius={KNOB / 2}
           blurAmount={blurAmount}
-          depth={5}
-          chromaAmount={0.9}
-          specularStrength={1.7}
-          tintOpacity={0.04}
+          depth={depth}
+          chromaAmount={chromaAmount}
+          specularStrength={specularStrength}
+          tintOpacity={tintOpacity}
+          scaleX={scaleX}
+          scaleY={scaleY}
+          backdropSelector={backdropSelector}
+          {...glassProps}
         />
         <motion.span
           className="gk-switch__skin"

@@ -22,10 +22,10 @@ const PHOTOS = [
 export function App() {
   // scene-wide glass parameters, driven live by the control panel
   const [blur, setBlur] = useState(0);
-  const [depth, setDepth] = useState(9);
-  const [chroma, setChroma] = useState(0.85);
-  const [radius, setRadius] = useState(40);
-  const [specular, setSpecular] = useState(1.3);
+  const [depth, setDepth] = useState(10);
+  const [chroma, setChroma] = useState(0);
+  const [radius, setRadius] = useState(47);
+  const [specular, setSpecular] = useState(3);
 
   const [playing, setPlaying] = useState(true);
   const [volume, setVolume] = useState(64);
@@ -64,11 +64,11 @@ export function App() {
       <Draggable initial={{ x: 48, y: 250 }} z={20}>
         <GlassPanel width={312} height={446} borderRadius={radius} {...panel}>
           <h2 className="panel-title">Glass controls</h2>
-          <GlassSlider label="Blur" value={blur} min={0} max={8} step={0.5} onChange={setBlur} display={`${blur}px`} blurAmount={blur} />
-          <GlassSlider label="Depth / bevel" value={depth} min={1} max={20} onChange={setDepth} blurAmount={blur} />
-          <GlassSlider label="Chromatic" value={chroma} min={0} max={2} step={0.05} onChange={setChroma} display={chroma.toFixed(2)} blurAmount={blur} />
-          <GlassSlider label="Corner radius" value={radius} min={12} max={70} onChange={setRadius} display={`${radius}px`} blurAmount={blur} />
-          <GlassSlider label="Specular" value={specular} min={0} max={3} step={0.1} onChange={setSpecular} display={specular.toFixed(1)} blurAmount={blur} />
+          <GlassSlider label="Blur" value={blur} min={0} max={8} step={0.5} onChange={setBlur} display={`${blur}px`} {...panel} />
+          <GlassSlider label="Depth / bevel" value={depth} min={1} max={20} onChange={setDepth} {...panel} />
+          <GlassSlider label="Chromatic" value={chroma} min={0} max={2} step={0.05} onChange={setChroma} display={chroma.toFixed(2)} {...panel} />
+          <GlassSlider label="Corner radius" value={radius} min={12} max={70} onChange={setRadius} display={`${radius}px`} {...panel} />
+          <GlassSlider label="Specular" value={specular} min={0} max={3} step={0.1} onChange={setSpecular} display={specular.toFixed(1)} {...panel} />
         </GlassPanel>
       </Draggable>
 
@@ -82,32 +82,32 @@ export function App() {
               <span className="media__artist">glass-kit</span>
             </div>
             <div className="media__controls">
-              <GlassButton width={46} height={46} blurAmount={blur}>⏮</GlassButton>
-              <GlassButton width={56} height={56} blurAmount={blur} onClick={() => setPlaying((p) => !p)}>
+              <GlassButton width={46} height={46} {...panel}>⏮</GlassButton>
+              <GlassButton width={56} height={56} {...panel} onClick={() => setPlaying((p) => !p)}>
                 {playing ? "⏸" : "▶"}
               </GlassButton>
-              <GlassButton width={46} height={46} blurAmount={blur}>⏭</GlassButton>
+              <GlassButton width={46} height={46} {...panel}>⏭</GlassButton>
             </div>
-            <GlassSlider label="Volume" value={volume} min={0} max={100} onChange={setVolume} display={`${volume}%`} blurAmount={blur} />
+            <GlassSlider label="Volume" value={volume} min={0} max={100} onChange={setVolume} display={`${volume}%`} {...panel} />
           </div>
         </Glass>
       </Draggable>
 
       {/* Segmented tabs */}
       <Draggable initial={{ x: 500, y: 430 }} z={17}>
-        <GlassSegmented tabs={["Supply", "Borrow", "Swap", "Stake"]} blurAmount={blur} />
+        <GlassSegmented tabs={["Supply", "Borrow", "Swap", "Stake"]} {...panel} />
       </Draggable>
 
       {/* Liquid morph-out menu */}
       <Draggable initial={{ x: 905, y: 200 }} z={19}>
-        <GlassMenu label="Actions" items={["Deposit", "Withdraw", "Bridge", "Repay"]} blurAmount={blur} />
+        <GlassMenu label="Actions" items={["Deposit", "Withdraw", "Bridge", "Repay"]} {...panel} />
       </Draggable>
 
       {/* Buttons */}
       <Draggable initial={{ x: 520, y: 520 }} z={16}>
         <div className="button-row">
-          <GlassButton blurAmount={blur}>Connect</GlassButton>
-          <GlassButton blurAmount={blur}>Claim</GlassButton>
+          <GlassButton {...panel}>Connect</GlassButton>
+          <GlassButton {...panel}>Claim</GlassButton>
         </div>
       </Draggable>
 
@@ -116,7 +116,7 @@ export function App() {
         <Glass width={260} height={150} borderRadius={radius} {...panel}>
           <div className="stat">
             <div className="stat__row">
-              <GlassSwitch checked={hi} onChange={setHi} blurAmount={blur} />
+              <GlassSwitch checked={hi} onChange={setHi} {...panel} />
               <span className="stat__label">{hi ? "High yield" : "Stable"}</span>
             </div>
             <div className="stat__num">
