@@ -82,12 +82,29 @@ export function GlassSlider({
     mass: 0.4,
   });
 
-  const thumbX = useTransform(prog, (p) => p * TRACK_W - thumbW / 2);
-  const fillWidth = useTransform(prog, (p) => p * TRACK_W);
+  const visualProg = useSpring(prog, { stiffness: 450, damping: 26 });
+  const thumbX = useTransform(visualProg, (p) => clamp(p, 0, 1) * TRACK_W - thumbW / 2);
+  const fillWidth = useTransform(visualProg, (p) => clamp(p, 0, 1) * TRACK_W);
   const grow = useTransform(press, (p) => 1 + 0.45 * p);
   const stretch = useTransform(velMag, (m) => clamp(m * 0.05, 0, 0.18));
-  const scaleX = useTransform([grow, stretch] as const, ([g, s]: number[]) => g * (1 + s));
-  const scaleY = useTransform([grow, stretch] as const, ([g, s]: number[]) => g * (1 - s * 0.4));
+
+  // Squash/stretch on boundary impact (squash horizontally when overshooting the edges)
+  const overshoot = useTransform(visualProg, (p) => {
+    if (p < 0) return -p;
+    if (p > 1) return p - 1;
+    return 0;
+  });
+  const squashX = useTransform(overshoot, (o) => 1 - o * 2.5);
+  const squashY = useTransform(overshoot, (o) => 1 + o * 1.2);
+
+  const scaleX = useTransform(
+    [grow, stretch, squashX] as const,
+    ([g, s, sqX]: number[]) => g * (1 + s) * sqX,
+  );
+  const scaleY = useTransform(
+    [grow, stretch, squashY] as const,
+    ([g, s, sqY]: number[]) => g * (1 - s * 0.4) * sqY,
+  );
   const skinOpacity = useTransform(press, (p) => 1 - p);
 
   const setFromClientX = useCallback(
@@ -164,6 +181,7 @@ export function GlassSlider({
             tintOpacity={tintOpacity}
             backdropSelector={backdropSelector}
             refractLeftSideOnly={refractLeftSideOnly}
+            shadowOpacity={0}
             sample={
               <motion.div
                 style={{
