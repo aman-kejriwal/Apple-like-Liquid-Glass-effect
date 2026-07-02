@@ -63,11 +63,9 @@ body {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(
-    120% 90% at 50% -10%,
-    rgba(7, 10, 22, 0) 40%,
-    rgba(7, 10, 22, 0.5) 100%
-  );
+  background: radial-gradient(120% 90% at 50% -10%,
+      rgba(7, 10, 22, 0) 40%,
+      rgba(7, 10, 22, 0.5) 100%);
 }
 
 .scene__title {
@@ -200,4 +198,90 @@ body {
 
 .orb {
   cursor: grab;
+}
+
+/* ------------------------------------------------------------ grid slider demo */
+
+.grid-slider-demo-container {
+  --gk-fill: 123 111 255;
+  /* Purple/lilac fill to match the image */
+  --gk-rail: 226 226 226;
+  /* Soft gray rail */
+
+  position: relative;
+  width: 440px;
+  height: 220px;
+  border-radius: 28px;
+  background: linear-gradient(135deg, #f3f0fd 0%, #e6e2fe 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(8, 15, 35, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+
+  /* Dashed grid lines */
+  background-image: url("data:image/svg+xml,%3Csvg width='40' height='40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M 40 0 L 0 0 0 40' fill='none' stroke='rgba(123, 111, 255, 0.22)' stroke-width='1.2' stroke-dasharray='4,4'/%3E%3C/svg%3E");
+  background-size: 40px 40px;
+  background-position: center;
+}
+
+.grid-slider-demo-card {
+  background: #ffffff;
+  padding: 0 32px;
+  border-radius: 28px;
+  box-shadow: 0 10px 30px rgba(8, 15, 35, 0.04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 400px;
+  height: 90px;
+}
+
+/* Override default dark text and styling overrides specifically for this card context */
+.grid-slider-demo-card .gk-slider {
+  margin: 0;
+}
+
+.grid-slider-demo-card .gk-slider__rail {
+  background: rgba(var(--gk-rail) / 0.5);
+  box-shadow: none;
+}
+
+.grid-slider-demo-card .gk-slider__fill {
+  background: rgba(var(--gk-fill) / 1);
+  /* solid purple fill */
+}
+
+/* ------------------------------------------------------------ slide button controls */
+
+.thumb-controls-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 22px 24px 8px;
+}
+
+.refract-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.thumb-controls-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0px 28px;
+  padding: 0 24px;
+}
+
+.thumb-controls-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.thumb-controls-col .gk-slider {
+  margin: 0 0 10px 0;
 }

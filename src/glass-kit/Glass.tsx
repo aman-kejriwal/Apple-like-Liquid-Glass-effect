@@ -50,10 +50,10 @@ export type GlassProps = PropsWithChildren<{
   edgeStrength?: number;
   edgeWidth?: number;
   edgeExponent?: number;
-  /** white wash over the lens, "r g b" */
   tintColor?: string;
   tintOpacity?: number;
   shadowOpacity?: number;
+  refractLeftSideOnly?: boolean;
   /**
    * Optional live DOM fallback for browsers that ignore url() in
    * backdrop-filter; filtered with the same chain and aligned via the offsets.
@@ -204,12 +204,13 @@ export function Glass(props: GlassProps) {
       edgeExponent: props.edgeExponent ?? DEFAULTS.edgeExponent,
       domeDepth: props.domeDepth ?? DEFAULTS.domeDepth,
       splayAmount: props.splayAmount ?? DEFAULTS.splayAmount,
+      refractLeftSideOnly: props.refractLeftSideOnly,
     }),
     [
       borderRadius, depth, lensHalfHeight, lensHalfWidth, mapSize,
       props.domeDepth, props.edgeExponent, props.edgeFalloff, props.edgeStrength,
       props.edgeWidth, props.glowExponent, props.glowSpread, props.glowStrength,
-      props.sdfBoundary, props.specularRotation, props.splayAmount,
+      props.sdfBoundary, props.specularRotation, props.splayAmount, props.refractLeftSideOnly,
     ],
   );
 

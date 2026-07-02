@@ -41,7 +41,7 @@ import { Glass, GlassButton, GlassSlider } from "./glass-kit";
 function Card() {
   const [vol, setVol] = useState(50);
   return (
-    <Glass width={320} height={180} borderRadius={28}>
+    <Glass width={320} height={180} borderRadius={10}>
       <GlassSlider label="Volume" value={vol} min={0} max={100} onChange={setVol} />
       <GlassButton onClick={connect}>Connect</GlassButton>
     </Glass>

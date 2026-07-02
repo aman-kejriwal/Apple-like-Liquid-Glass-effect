@@ -1,4 +1,5 @@
-import { motion } from "framer-motion";
+import { useEffect } from "react";
+import { animate, motion, useMotionValue, useTransform } from "framer-motion";
 import { Glass, type GlassProps } from "./Glass";
 import { useMorphActive } from "./useMorphActive";
 
@@ -30,6 +31,18 @@ export function GlassSwitch({
 } & Omit<GlassProps, "width" | "height" | "borderRadius" | "children">) {
   const { active, engage, release } = useMorphActive(320);
 
+  const x = useMotionValue(checked ? TRAVEL : 0);
+  useEffect(() => {
+    animate(x, checked ? TRAVEL : 0, {
+      type: "spring",
+      stiffness: 600,
+      damping: 22,
+      mass: 0.5,
+    });
+  }, [checked, x]);
+
+  const sampleX = useTransform(x, (val) => -val);
+
   return (
     <button
       type="button"
@@ -46,15 +59,15 @@ export function GlassSwitch({
       <span className="gk-switch__track" />
       <motion.span
         className="gk-switch__knob"
-        style={{ width: KNOB, height: KNOB, borderRadius: KNOB / 2 }}
+        style={{ width: KNOB, height: KNOB, borderRadius: KNOB / 2, x }}
         animate={{
-          x: checked ? TRAVEL : 0,
           scaleX: active ? 1.18 : 1,
           scaleY: active ? 0.9 : 1,
         }}
         transition={{ type: "spring", stiffness: 600, damping: 22, mass: 0.5 }}
       >
         <Glass
+          {...glassProps}
           width={KNOB}
           height={KNOB}
           borderRadius={KNOB / 2}
@@ -66,12 +79,41 @@ export function GlassSwitch({
           scaleX={scaleX}
           scaleY={scaleY}
           backdropSelector={backdropSelector}
-          {...glassProps}
+          sample={
+            <motion.div
+              style={{
+                position: "absolute",
+                left: 0,
+                top: 0,
+                width: W,
+                height: KNOB,
+                x: sampleX,
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  top: -PAD,
+                  width: W,
+                  height: H,
+                  borderRadius: H / 2,
+                  background: checked ? "rgba(var(--gk-accent) / 0.85)" : "rgba(120, 130, 150, 0.4)",
+                  transition: "background 0.25s ease",
+                }}
+              />
+            </motion.div>
+          }
+          sampleWidth={W}
+          sampleHeight={KNOB}
         />
         <motion.span
           className="gk-switch__skin"
+          style={{ borderRadius: "inherit" }}
           animate={{ opacity: active ? 0 : 1 }}
-          transition={{ duration: 0.2 }}
+          transition={{ duration: 0.4 }}
         />
       </motion.span>
     </button>

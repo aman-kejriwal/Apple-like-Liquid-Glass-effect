@@ -11,7 +11,8 @@ import { Glass, type GlassProps } from "./Glass";
 import { useMorphActive } from "./useMorphActive";
 
 const TRACK_W = 264;
-const THUMB = 24;
+const THUMB_W = 48;
+const THUMB_H = 24;
 const HIT_H = 30;
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 
@@ -35,6 +36,10 @@ export function GlassSlider({
   specularStrength = 1.5,
   tintOpacity = 0.05,
   backdropSelector,
+  refractLeftSideOnly,
+  thumbW = 48,
+  thumbH = 24,
+  borderRadius,
   ...glassProps
 }: {
   label?: string;
@@ -46,6 +51,9 @@ export function GlassSlider({
   display?: string;
   scaleX?: number;
   scaleY?: number;
+  thumbW?: number;
+  thumbH?: number;
+  borderRadius?: number;
 } & Omit<GlassProps, "width" | "height" | "borderRadius" | "children">) {
   const hitRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
@@ -74,9 +82,7 @@ export function GlassSlider({
     mass: 0.4,
   });
 
-  const thumbX = useTransform(prog, (p) =>
-    clamp(p * TRACK_W, THUMB / 2, TRACK_W - THUMB / 2) - THUMB / 2,
-  );
+  const thumbX = useTransform(prog, (p) => p * TRACK_W - thumbW / 2);
   const fillWidth = useTransform(prog, (p) => p * TRACK_W);
   const grow = useTransform(press, (p) => 1 + 0.45 * p);
   const stretch = useTransform(velMag, (m) => clamp(m * 0.05, 0, 0.18));
@@ -136,20 +142,47 @@ export function GlassSlider({
         <motion.div className="gk-slider__fill" style={{ width: fillWidth }} />
         <motion.div
           className="gk-slider__thumb"
-          style={{ width: THUMB, height: THUMB, x: thumbX, scaleX, scaleY }}
+          style={{
+            width: thumbW,
+            height: thumbH,
+            x: thumbX,
+            scaleX,
+            scaleY,
+            marginTop: -thumbH / 2,
+            borderRadius: borderRadius ?? thumbH / 2,
+          }}
         >
           <Glass
-            width={THUMB}
-            height={THUMB}
-            borderRadius={THUMB / 2}
+            {...glassProps}
+            width={thumbW}
+            height={thumbH}
+            borderRadius={borderRadius ?? thumbH / 2}
             blurAmount={blurAmount}
             depth={depth}
             chromaAmount={chromaAmount}
             specularStrength={specularStrength}
             tintOpacity={tintOpacity}
             backdropSelector={backdropSelector}
-            forceClone={true}
-            {...glassProps}
+            refractLeftSideOnly={refractLeftSideOnly}
+            sample={
+              <motion.div
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  top: 0,
+                  width: TRACK_W,
+                  height: thumbH,
+                  x: useTransform(thumbX, (val) => -val),
+                  display: "flex",
+                  alignItems: "center",
+                }}
+              >
+                <div className="gk-slider__rail" />
+                <motion.div className="gk-slider__fill" style={{ width: fillWidth }} />
+              </motion.div>
+            }
+            sampleWidth={TRACK_W}
+            sampleHeight={thumbH}
           />
           <motion.div className="gk-slider__thumbskin" style={{ opacity: skinOpacity }} />
         </motion.div>

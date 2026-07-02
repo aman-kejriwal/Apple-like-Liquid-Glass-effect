@@ -224,6 +224,7 @@
   top: 50%;
   margin-top: -12px; /* -THUMB/2 */
   transform-origin: center center;
+  border-radius: 12px;
 }
 
 .gk-slider__thumb > .gk-glass {
@@ -235,8 +236,12 @@
 .gk-slider__thumbskin {
   position: absolute;
   inset: 0;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.14);
+  border-radius: inherit;
+  background: #ffffff;
+  box-shadow: 
+    0 3px 8px rgba(8, 15, 35, 0.12), 
+    0 1px 3px rgba(8, 15, 35, 0.04),
+    inset 0 0 0 1px rgba(8, 15, 35, 0.06);
 }
 
 /* ---------------------------------------------------------------- segmented */

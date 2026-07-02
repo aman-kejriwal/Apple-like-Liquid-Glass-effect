@@ -25,6 +25,7 @@ export type DisplacementMapOptions = {
   edgeExponent: number;
   domeDepth: number;
   splayAmount: number;
+  refractLeftSideOnly?: boolean;
 };
 
 const clamp = (value: number, min: number, max: number) =>
@@ -113,6 +114,7 @@ export function generateDisplacementMap(options: DisplacementMapOptions) {
     edgeExponent,
     domeDepth,
     splayAmount,
+    refractLeftSideOnly,
   } = options;
 
   const canvas = document.createElement("canvas");
@@ -208,9 +210,14 @@ export function generateDisplacementMap(options: DisplacementMapOptions) {
         bevelMix = 0.5 * (1 + erf(innerDistance * falloffScale));
       }
 
-      imageData.data[index] = Math.round((0.5 - 0.5 * gradientX * bevelMix) * 255);
+      let displMix = bevelMix;
+      if (refractLeftSideOnly && x > 0) {
+        displMix = 0;
+      }
+
+      imageData.data[index] = Math.round((0.5 - 0.5 * gradientX * displMix) * 255);
       imageData.data[index + 1] = Math.round(
-        (0.5 - 0.5 * gradientY * bevelMix) * 255,
+        (0.5 - 0.5 * gradientY * displMix) * 255,
       );
 
       if (hasSpecular) {
@@ -272,6 +279,7 @@ function cacheKey(options: DisplacementMapOptions): string {
     options.edgeExponent,
     options.domeDepth,
     options.splayAmount,
+    options.refractLeftSideOnly ? 1 : 0,
   ].join("|");
 }
 

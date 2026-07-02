@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   animate,
   motion,
@@ -12,7 +12,6 @@ import { Glass, type GlassProps } from "./Glass";
 const TAB_W = 96;
 const TAB_H = 44;
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
-const SPRING = { type: "spring", stiffness: 480, damping: 30, mass: 0.7 } as const;
 
 /**
  * Segmented control. The selection is the same refracting Glass used elsewhere
@@ -31,26 +30,39 @@ export function GlassSegmented({
   specularStrength = 1.5,
   tintOpacity = 0.2,
   backdropSelector,
+  stiffness = 180,
+  damping = 20,
+  mass = 0.7,
   ...glassProps
 }: {
   tabs: string[];
   value?: number;
   onChange?: (index: number) => void;
+  stiffness?: number;
+  damping?: number;
+  mass?: number;
 } & Omit<GlassProps, "width" | "height" | "borderRadius" | "children">) {
   const [internal, setInternal] = useState(0);
   const active = value ?? internal;
   const barRef = useRef<HTMLDivElement>(null);
   const maxX = (tabs.length - 1) * TAB_W;
 
+  const springConfig = useMemo(() => ({
+    type: "spring" as const,
+    stiffness,
+    damping,
+    mass,
+  }), [stiffness, damping, mass]);
+
   const x = useMotionValue(active * TAB_W);
   useEffect(() => {
-    animate(x, active * TAB_W, SPRING);
-  }, [active, x]);
+    animate(x, active * TAB_W, springConfig);
+  }, [active, x, springConfig]);
 
   const velocity = useVelocity(x);
   const stretch = useSpring(
     useTransform(velocity, (v) => clamp(Math.abs(v) / 1500, 0, 0.4)),
-    { stiffness: 480, damping: 22, mass: 0.4 },
+    { stiffness: 480, damping: 50, mass: 0.4 },
   );
   const scaleX = useTransform(stretch, (s) => 1 + s);
   const scaleY = useTransform(stretch, (s) => 1 - s * 0.4);
@@ -74,7 +86,7 @@ export function GlassSegmented({
       };
       const up = () => {
         const i = clamp(Math.round(x.get() / TAB_W), 0, tabs.length - 1);
-        animate(x, i * TAB_W, SPRING);
+        animate(x, i * TAB_W, springConfig);
         commit(i);
         window.removeEventListener("pointermove", move);
         window.removeEventListener("pointerup", up);
@@ -82,7 +94,7 @@ export function GlassSegmented({
       window.addEventListener("pointermove", move);
       window.addEventListener("pointerup", up);
     },
-    [commit, maxX, tabs.length, x],
+    [commit, maxX, tabs.length, x, springConfig],
   );
 
   return (
